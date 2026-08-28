@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>写メモVoice ポスティング版</title>
+<meta name="theme-color" content="#F5F0E8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#F5F0E8;--surface:#EDE8DE;--panel:#EAE5DB;--panel2:#F9F6F0;
+  --border:rgba(0,0,0,.10);--border2:rgba(0,0,0,.18);
+  --accent:#1A6EBF;--orange:#C06010;--amber:#9A7000;--purple:#6858C0;
+  --green:#1A8040;--red:#C03030;
+  --text:#1A1E26;--dim:#6A7888;--dim2:#9AAABB;
+  --font:-apple-system,'Hiragino Sans','Yu Gothic UI',sans-serif;
+  --mono:'SF Mono','Consolas',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var(--font);color:var(--text);}
+#app{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;}
+
+/* ── 上部ステータスバー ── */
+#statusbar{
+  height:44px;flex-shrink:0;background:var(--panel2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 12px;
+  padding-top:env(safe-area-inset-top);z-index:30;
+}
+#sbArea{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#sbArea .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+#sbProgress{font-size:11px;font-weight:700;color:var(--dim);flex-shrink:0;padding-left:8px;}
+#sbProgress b{color:var(--orange);font-weight:800;}
+#sbMenuBtn{width:28px;height:28px;flex-shrink:0;border:none;background:none;font-size:18px;color:var(--dim);}
+
+/* ── カメラ領域 ── */
+#cameraZone{height:34vh;min-height:180px;flex-shrink:0;position:relative;background:#111;overflow:hidden;}
+#cameraVideo{width:100%;height:100%;object-fit:cover;display:block;}
+#cameraPlaceholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:12px;gap:8px;text-align:center;padding:0 20px;}
+#cameraPlaceholder button{margin-top:6px;padding:8px 18px;border-radius:20px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;}
+.cam-badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;font-family:var(--mono);padding:4px 8px;border-radius:6px;display:flex;align-items:center;gap:5px;z-index:5;}
+.cam-badge .gdot{width:6px;height:6px;border-radius:50%;background:#888;}
+.cam-badge.ok .gdot{background:#3FDB6B;}
+#camCompass{position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:700;z-index:5;}
+#shutterRow{position:absolute;bottom:10px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:30px;z-index:5;}
+#btnShutter{width:56px;height:56px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);box-shadow:0 3px 10px rgba(0,0,0,.4);}
+#btnShutter:active{transform:scale(.92);}
+#btnCamClose{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:14px;}
+#camGpsWarn{position:absolute;bottom:74px;left:10px;right:10px;background:rgba(192,48,48,.92);color:#fff;font-size:11px;padding:6px 10px;border-radius:6px;text-align:center;display:none;z-index:6;}
+
+/* ── マップ領域 ── */
+#mapZone{flex:1;position:relative;background:#DDD5C4;overflow:hidden;}
+#gmap{position:absolute;inset:0;}
+#areaLegend{
+  position:absolute;top:8px;left:8px;background:rgba(255,255,255,.94);border-radius:8px;
+  padding:7px 10px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.15);z-index:10;max-width:62%;
+}
+#areaLegend .name{font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#areaLegend .sub{color:var(--dim);font-size:10px;margin-top:2px;}
+#areaLegend .bar{width:100%;height:5px;background:var(--border2);border-radius:3px;margin-top:5px;overflow:hidden;}
+#areaLegend .bar i{display:block;height:100%;background:var(--orange);}
+#locateBtn{position:absolute;bottom:12px;right:10px;width:38px;height:38px;border-radius:50%;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.2);border:none;color:var(--accent);font-size:16px;z-index:10;}
+#noInstructionMsg{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:0 30px;text-align:center;color:var(--dim);font-size:13px;background:var(--bg);z-index:20;}
+#noInstructionMsg button{padding:10px 22px;border-radius:22px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:700;}
+
+/* ── 下部ツールバー ── */
+#toolbar{
+  height:66px;flex-shrink:0;background:var(--panel2);border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-around;padding:4px 6px;
+  padding-bottom:env(safe-area-inset-bottom);z-index:30;
+}
+.tb-btn{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--dim);font-size:9px;font-weight:700;background:none;border:none;flex:1;}
+.tb-btn .ic{width:32px;height:32px;border-radius:9px;background:var(--panel);display:flex;align-items:center;justify-content:center;font-size:15px;margin:0 auto;}
+.tb-btn.primary .ic{background:var(--accent);color:#fff;width:44px;height:44px;font-size:19px;}
+.tb-btn.primary{color:var(--accent);}
+
+/* ── 共通モーダル ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:flex-end;justify-content:center;z-index:100;}
+.modal-overlay.show{display:flex;}
+.modal-sheet{width:100%;max-width:480px;background:var(--bg);border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));max-height:82vh;overflow-y:auto;}
+.modal-sheet h3{font-size:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;}
+.modal-sheet h3 .x{font-size:20px;color:var(--dim);}
+.field-row{margin-bottom:12px;}
+.field-row label{font-size:11px;color:var(--dim);font-weight:700;display:block;margin-bottom:4px;}
+.field-row input,.field-row textarea,.field-row select{width:100%;padding:9px 11px;border-radius:8px;border:1px solid var(--border2);background:var(--panel2);font-size:14px;font-family:inherit;}
+.btn-row{display:flex;gap:8px;margin-top:14px;}
+.btn{flex:1;padding:12px;border-radius:10px;border:none;font-size:14px;font-weight:800;}
+.btn.primary{background:var(--accent);color:#fff;}
+.btn.ghost{background:var(--panel);color:var(--text);}
+.btn.danger{background:var(--red);color:#fff;}
+.plan-hint{font-size:11px;color:var(--dim2);margin-top:-6px;margin-bottom:10px;}
+
+/* エリア完了モーダル */
+#areaModalStats{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px;background:var(--panel);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+#areaModalStats .lbl{color:var(--dim);}
+#areaModalStats .val{font-weight:800;}
+
+/* ピン吹き出し用info window内スタイルはJS内で直書き */
+
+/* 進捗一覧モーダル */
+.progress-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:12.5px;}
+.progress-item:last-child{border-bottom:none;}
+.progress-item .pname{font-weight:700;}
+.progress-item .pstat{color:var(--dim);font-size:11px;}
+.progress-item .badge{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;}
+.badge.done{background:rgba(26,128,64,.15);color:var(--green);}
+.badge.pending{background:rgba(154,112,0,.15);color:var(--amber);}
+
+/* トースト */
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%) translateY(20px);background:#1A1E26;color:#fff;padding:10px 18px;border-radius:22px;font-size:12.5px;opacity:0;pointer-events:none;transition:.25s;z-index:200;max-width:86%;text-align:center;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.err{background:var(--red);}
+
+input[type=file]{display:none;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="statusbar">
+    <div id="sbArea"><span class="dot"></span><span id="sbAreaText">配達指示データ未読込</span></div>
+    <div id="sbProgress"></div>
+    <button id="sbMenuBtn">☰</button>
+  </div>
+
+  <div id="cameraZone">
+    <video id="cameraVideo" autoplay playsinline muted style="display:none;"></video>
+    <div id="cameraPlaceholder">
+      <div>タップしてカメラを起動</div>
+      <button id="btnOpenCamera">📷 カメラを開く</button>
+    </div>
+    <div class="cam-badge" id="gpsBadge"><span class="gdot"></span><span id="gpsBadgeText">GPS取得中</span></div>
+    <div id="camCompass" style="display:none;">N↑</div>
+    <div id="camGpsWarn">GPSを取得できていません。電波の良い場所で少し待ってから撮影してください。</div>
+    <div id="shutterRow" style="display:none;">
+      <button id="btnCamClose">✕</button>
+      <button id="btnShutter"></button>
+      <div style="width:34px;"></div>
+    </div>
+  </div>
+
+  <div id="mapZone">
+    <div id="gmap"></div>
+    <div id="areaLegend" style="display:none;">
+      <div class="name" id="legendName">—</div>
+      <div class="sub" id="legendSub">—</div>
+      <div class="bar"><i id="legendBar" style="width:0%;"></i></div>
+    </div>
+    <button id="locateBtn">◎</button>
+    <div id="noInstructionMsg">
+      <div>まだ配達指示データが読み込まれていません。<br>管理者から受け取ったファイルを読み込んでください。</div>
+      <button id="btnImportFromEmpty">📥 配達指示データを読み込む</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button class="tb-btn" id="tbImport"><div class="ic">📥</div>指示読込</button>
+    <button class="tb-btn" id="tbMemo"><div class="ic">🎙️</div>メモ追記</button>
+    <button class="tb-btn primary" id="tbShutterJump"><div class="ic">📷</div>撮影</button>
+    <button class="tb-btn" id="tbProgress"><div class="ic">📊</div>進捗</button>
+    <button class="tb-btn" id="tbExport"><div class="ic">📤</div>実績出力</button>
+  </div>
+
+</div>
+
+<input type="file" id="fileImportInstruction" accept=".json">
+
+<!-- メニュー -->
+<div class="modal-overlay" id="menuModal">
+  <div class="modal-sheet">
+    <h3>メニュー<span class="x" data-close>×</span></h3>
+    <div class="btn-row" style="flex-direction:column;">
+      <button class="btn ghost" id="menuAddProhibited">🚫 配達禁止・苦情マーカーを現在地に追加</button>
+      <button class="btn ghost" id="menuDisplayMode" style="margin-top:8px;">🔁 表示モード切替（数字／マーク）</button>
+      <button class="btn ghost" id="menuDistributorInfo" style="margin-top:8px;">👤 配達員情報を確認</button>
+    </div>
+  </div>
+</div>
+
+<!-- ピン（撮影ポイント）詳細 -->
+<div class="modal-overlay" id="pinModal">
+  <div class="modal-sheet">
+    <h3>撮影ポイント<span class="x" data-close>×</span></h3>
+    <img id="pinPhoto" style="width:100%;border-radius:10px;margin-bottom:10px;background:var(--panel);min-height:140px;object-fit:cover;">
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px;" id="pinMeta">—</div>
+    <div class="field-row">
+      <label>メモ（任意）</label>
+      <textarea id="pinMemoInput" rows="2" placeholder="不在／ポスト投函／要注意 など"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" id="pinVoiceBtn">🎙️ 音声で入力</button>
+      <button class="btn primary" id="pinSaveBtn">保存</button>
+    </div>
+    <button class="btn danger" id="pinDeleteBtn" style="margin-top:8px;width:100%;">この記録を削除</button>
+  </div>
+</div>
+
+<!-- エリア完了モーダル -->
+<div class="modal-overlay" id="areaModal">
+  <div class="modal-sheet">
+    <h3 id="areaModalTitle">エリア<span class="x" data-close>×</span></h3>
+    <div id="areaModalStats"></div>
+    <div class="field-row">
+      <label>配達枚数（計画値。相違があれば修正してください）</label>
+      <input type="number" id="areaCountInput" inputmode="numeric">
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" id="areaUndoBtn" style="display:none;">完了を取り消す</button>
+      <button class="btn primary" id="areaCompleteBtn">✓ 配達完了にする</button>
+    </div>
+  </div>
+</div>
+
+<!-- 禁止・苦情マーカー追加 -->
+<div class="modal-overlay" id="prohibitedModal">
+  <div class="modal-sheet">
+    <h3>配達禁止・苦情マーカー<span class="x" data-close>×</span></h3>
+    <div class="field-row">
+      <label>種別</label>
+      <select id="prohibitedType">
+        <option value="配達禁止">配達禁止</option>
+        <option value="苦情あり">苦情あり</option>
+        <option value="要注意">要注意</option>
+      </select>
+    </div>
+    <div class="field-row">
+      <label>メモ</label>
+      <textarea id="prohibitedMemo" rows="2" placeholder="「チラシお断り」の張り紙あり、など"></textarea>
+    </div>
+    <div class="plan-hint">この情報は今回の配布回に限らず、エリアの共通情報として今後も表示され続けます。</div>
+    <div class="btn-row">
+      <button class="btn primary" id="prohibitedSaveBtn">登録する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 進捗一覧 -->
+<div class="modal-overlay" id="progressModal">
+  <div class="modal-sheet">
+    <h3>本日の進捗<span class="x" data-close>×</span></h3>
+    <div id="progressList"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const API_KEY='AIzaSyCxFFQxa-0PtBYfJ9gXWkur2wiszMwk7S0';
+
+// ── 状態 ──
+let map=null, areaPolygons={}, photoPins=[], prohibitedMarkerObjs=[], activeIW=null;
+let instruction=null;      // 読み込んだ配達指示データ
+let areaResults={};        // keyCode -> {completedCount, completedAt}
+let photoEntries=[];       // 撮影済みポイント（IndexedDBにも保存）
+let newProhibitedMarkers=[]; // このセッションで追加した禁止・苦情マーカー
+let displayMode='number';  // 'number' | 'point'
+let db=null;
+const DB_NAME='shabememo_posting_db';
+
+// ── IndexedDB ──
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,1);
+    req.onupgradeneeded=(e)=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains('photos'))d.createObjectStore('photos',{keyPath:'id'});
+      if(!d.objectStoreNames.contains('state'))d.createObjectStore('state',{keyPath:'key'});
+    };
+    req.onsuccess=(e)=>resolve(e.target.result);
+    req.onerror=(e)=>reject(e);
+  });
+}
+function idbSavePhoto(entry){
+  return new Promise((resolve)=>{
+    const tx=db.transaction('photos','readwrite');
+    tx.objectStore('photos').put(entry);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>resolve();
+  });
+}
+function idbDeletePhoto(id){
+  return new Promise((resolve)=>{
+    const tx=db.transaction('photos','readwrite');
+    tx.objectStore('photos').delete(id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>resolve();
+  });
+}
+function idbGetAllPhotos(){
+  return new Promise((resolve)=>{
+    const tx=db.transaction('photos','readonly');
+    const req=tx.objectStore('photos').getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>resolve([]);
+  });
+}
+function idbSaveState(key,value){
+  return new Promise((resolve)=>{
+    const tx=db.transaction('state','readwrite');
+    tx.objectStore('state').put({key,value});
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>resolve();
+  });
+}
+function idbGetState(key){
+  return new Promise((resolve)=>{
+    const tx=db.transaction('state','readonly');
+    const req=tx.objectStore('state').get(key);
+    req.onsuccess=()=>resolve(req.result?req.result.value:null);
+    req.onerror=()=>resolve(null);
+  });
+}
+
+// ── トースト ──
+let toastTimer=null;
+function showToast(msg,type){
+  const t=$('toast');
+  t.textContent=msg;
+  t.className='show'+(type==='err'?' err':'');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>{t.className='';},2600);
+}
+
+function esc(s){return(s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── Google Maps 初期化 ──
+function ensureMaps(){
+  return new Promise((resolve)=>{
+    if(window.google&&window.google.maps){resolve();return;}
+    window.initMap=()=>resolve();
+    const s=document.createElement('script');
+    s.src=`https://maps.googleapis.com/maps/api/js?key=${API_KEY}&callback=initMap`;
+    document.head.appendChild(s);
+  });
+}
+async function setupMap(){
+  await ensureMaps();
+  map=new google.maps.Map($('gmap'),{
+    center:{lat:35.5906,lng:139.7160}, zoom:15,
+    disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy',
+    styles:[{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}]
+  });
+  $('locateBtn').addEventListener('click',()=>{
+    if(!navigator.geolocation)return;
+    navigator.geolocation.getCurrentPosition(pos=>{
+      map.panTo({lat:pos.coords.latitude,lng:pos.coords.longitude});
+      map.setZoom(17);
+    });
+  });
+}
+
+// ── 配達指示データの読み込み ──
+$('fileImportInstruction').addEventListener('change',(e)=>handleImportInstruction(e.target.files[0]));
+$('tbImport').addEventListener('click',()=>$('fileImportInstruction').click());
+$('btnImportFromEmpty').addEventListener('click',()=>$('fileImportInstruction').click());
+
+async function handleImportInstruction(file){
+  if(!file)return;
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    if(data.packageType!=='distribution_instruction'){showToast('配達指示データの形式が正しくありません','err');return;}
+    instruction=data;
+    areaResults={};
+    newProhibitedMarkers=[];
+    await idbSaveState('instruction',instruction);
+    await idbSaveState('areaResults',areaResults);
+    await idbSaveState('newProhibitedMarkers',newProhibitedMarkers);
+    renderInstruction();
+    showToast(`配達指示データを読み込みました（エリア${instruction.areas.length}件）`);
+  }catch(err){
+    console.error(err);
+    showToast('配達指示データの読み込みに失敗しました','err');
+  }
+}
+
+function renderInstruction(){
+  if(!instruction){$('noInstructionMsg').style.display='flex';return;}
+  $('noInstructionMsg').style.display='none';
+  $('sbAreaText').textContent=`${instruction.distributorName||'配達員'}（${instruction.orderName||instruction.clientName||''}）`;
+
+  // 既存ポリゴン・マーカーをクリア
+  Object.values(areaPolygons).forEach(a=>a.polygon.setMap(null));
+  areaPolygons={};
+  prohibitedMarkerObjs.forEach(m=>m.setMap(null));
+  prohibitedMarkerObjs=[];
+
+  const bounds=new google.maps.LatLngBounds();
+  instruction.areas.forEach(area=>{
+    const path=area.path.map(p=>({lat:p[0],lng:p[1]}));
+    path.forEach(p=>bounds.extend(p));
+    const result=areaResults[area.keyCode];
+    const done=!!result;
+    const polygon=new google.maps.Polygon({
+      paths:path, map:map,
+      strokeColor: done?'#1A8040':'#8080FF', strokeOpacity:.9, strokeWeight:1.5,
+      fillColor: done?'#1A8040':'#C9C2B4', fillOpacity: done?.42:.28,
+      zIndex:2
+    });
+    const centroid=computeCentroid(path);
+    const label=new google.maps.Marker({
+      position:centroid, map:map,
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:0,fillOpacity:0,strokeOpacity:0},
+      label: displayMode==='number'
+        ? {text:String(result?result.completedCount:area.plannedCount), color:'#1A1E26', fontSize:'12px', fontWeight:'800'}
+        : {text:'●', color: done?'#1A8040':'#C06010', fontSize:'20px'}
+    });
+    polygon.addListener('click',()=>openAreaModal(area));
+    label.addListener('click',()=>openAreaModal(area));
+    areaPolygons[area.keyCode]={polygon,label,area};
+  });
+
+  (instruction.prohibitedMarkers||[]).concat(newProhibitedMarkers).forEach(pm=>{
+    prohibitedMarkerObjs.push(buildProhibitedMarker(pm));
+  });
+
+  if(instruction.areas.length)map.fitBounds(bounds,{padding:30});
+  updateProgressSummary();
+}
+
+function computeCentroid(path){
+  let lat=0,lng=0;
+  path.forEach(p=>{lat+=p.lat;lng+=p.lng;});
+  return {lat:lat/path.length,lng:lng/path.length};
+}
+
+function buildProhibitedMarker(pm){
+  const marker=new google.maps.Marker({
+    position:{lat:pm.lat,lng:pm.lng}, map:map, zIndex:8,
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:'#C03030',fillOpacity:.95,strokeColor:'#fff',strokeWeight:2}
+  });
+  const iw=new google.maps.InfoWindow({content:`<div style="font-family:sans-serif;font-size:12px;max-width:200px;"><div style="font-weight:800;color:#C03030;">🚫 ${esc(pm.type)}</div><div style="margin-top:4px;color:#1A1E26;">${esc(pm.memo||'（メモなし）')}</div></div>`});
+  marker.addListener('click',()=>{if(activeIW)activeIW.close();iw.open(map,marker);activeIW=iw;});
+  return marker;
+}
+
+// ── エリア完了フロー ──
+let currentAreaModalKeyCode=null;
+function openAreaModal(area){
+  currentAreaModalKeyCode=area.keyCode;
+  $('areaModalTitle').innerHTML=`${esc(area.name)}<span class="x" data-close>×</span>`;
+  const result=areaResults[area.keyCode];
+  $('areaModalStats').innerHTML=`
+    <span class="lbl">町丁目</span><span class="val">${esc(area.cityName||'')}</span>
+    <span class="lbl">世帯数（統計）</span><span class="val">${area.setai!=null?area.setai.toLocaleString()+' 世帯':'—'}</span>
+    <span class="lbl">計画配布枚数</span><span class="val">${area.plannedCount!=null?area.plannedCount.toLocaleString()+' 枚':'—'}</span>
+    <span class="lbl">状態</span><span class="val" style="color:${result?'#1A8040':'#9A7000'};">${result?'配達完了':'未着手'}</span>
+  `;
+  $('areaCountInput').value = result ? result.completedCount : (area.plannedCount!=null?area.plannedCount:'');
+  $('areaUndoBtn').style.display = result ? 'block' : 'none';
+  $('areaModal').classList.add('show');
+}
+$('areaCompleteBtn').addEventListener('click',async()=>{
+  const area=instruction.areas.find(a=>a.keyCode===currentAreaModalKeyCode);
+  const count=Number($('areaCountInput').value)||0;
+  areaResults[currentAreaModalKeyCode]={completedCount:count,completedAt:new Date().toISOString()};
+  await idbSaveState('areaResults',areaResults);
+  const rec=areaPolygons[currentAreaModalKeyCode];
+  rec.polygon.setOptions({fillColor:'#1A8040',fillOpacity:.42,strokeColor:'#1A8040'});
+  rec.label.setLabel(displayMode==='number'
+    ? {text:String(count),color:'#1A1E26',fontSize:'12px',fontWeight:'800'}
+    : {text:'●',color:'#1A8040',fontSize:'20px'});
+  $('areaModal').classList.remove('show');
+  updateProgressSummary();
+  showToast(`${area.name}を配達完了にしました（${count.toLocaleString()}枚）`);
+});
+$('areaUndoBtn').addEventListener('click',async()=>{
+  delete areaResults[currentAreaModalKeyCode];
+  await idbSaveState('areaResults',areaResults);
+  const area=instruction.areas.find(a=>a.keyCode===currentAreaModalKeyCode);
+  const rec=areaPolygons[currentAreaModalKeyCode];
+  rec.polygon.setOptions({fillColor:'#C9C2B4',fillOpacity:.28,strokeColor:'#8080FF'});
+  rec.label.setLabel(displayMode==='number'
+    ? {text:String(area.plannedCount),color:'#1A1E26',fontSize:'12px',fontWeight:'800'}
+    : {text:'●',color:'#C06010',fontSize:'20px'});
+  $('areaModal').classList.remove('show');
+  updateProgressSummary();
+});
+
+function updateProgressSummary(){
+  if(!instruction){$('sbProgress').textContent='';return;}
+  const totalPlanned=instruction.areas.reduce((s,a)=>s+(a.plannedCount||0),0);
+  const totalDone=Object.values(areaResults).reduce((s,r)=>s+(r.completedCount||0),0);
+  const doneAreas=Object.keys(areaResults).length;
+  $('sbProgress').innerHTML=`配布 <b>${totalDone.toLocaleString()}</b>/${totalPlanned.toLocaleString()}枚`;
+
+  // 現在地に一番近いエリアをレジェンドに表示（簡易版：最初の未完了エリア）
+  const target=instruction.areas.find(a=>!areaResults[a.keyCode])||instruction.areas[doneAreas>0?doneAreas-1:0];
+  if(target){
+    $('areaLegend').style.display='block';
+    $('legendName').textContent=target.name;
+    const r=areaResults[target.keyCode];
+    $('legendSub').textContent=`目標 ${target.plannedCount?.toLocaleString()||'—'}枚${r?'／完了 '+r.completedCount.toLocaleString()+'枚':''}`;
+    $('legendBar').style.width=(r?100:0)+'%';
+  }
+}
+
+// ── カメラ ──
+let cameraStream=null, geoWatchId=null, latestGeo=null, latestHeading=null, headingBuffer=[], orientationHandler=null, orientationSensor=null;
+
+function circularMeanDeg(arr){
+  if(!arr.length)return null;
+  let sx=0,sy=0;
+  arr.forEach(d=>{const r=d*Math.PI/180;sx+=Math.cos(r);sy+=Math.sin(r);});
+  let deg=Math.atan2(sy,sx)*180/Math.PI;
+  if(deg<0)deg+=360;
+  return deg;
+}
+function pushHeadingSample(h){headingBuffer.push(h);if(headingBuffer.length>8)headingBuffer.shift();}
+function quaternionToHeading(q){
+  if(!q)return null;
+  const [x,y,z,w]=q;
+  const siny=2*(w*z+x*y), cosy=1-2*(y*y+z*z);
+  let heading=Math.atan2(siny,cosy)*180/Math.PI;
+  heading=(360-heading)%360;
+  return heading;
+}
+function getCompassHeading(e){
+  if(e.webkitCompassHeading!==undefined&&e.webkitCompassHeading!==null)return e.webkitCompassHeading;
+  if(e.alpha!==null&&e.absolute)return (360-e.alpha)%360;
+  return null;
+}
+function updateCompassNeedle(deg){
+  $('camCompass').style.display='flex';
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  const idx=Math.round(deg/45)%8;
+  $('camCompass').textContent=dirs[idx]+'↑';
+}
+function updateGpsBadge(){
+  const badge=$('gpsBadge');
+  if(latestGeo){badge.classList.add('ok');$('gpsBadgeText').textContent='GPS良好';}
+  else{badge.classList.remove('ok');$('gpsBadgeText').textContent='GPS取得中';}
+}
+
+async function openCamera(){
+  latestGeo=null;latestHeading=null;headingBuffer=[];
+  $('cameraPlaceholder').style.display='none';
+  $('camGpsWarn').style.display='none';
+  updateGpsBadge();
+
+  if(navigator.geolocation){
+    geoWatchId=navigator.geolocation.watchPosition(
+      pos=>{latestGeo={lat:pos.coords.latitude,lng:pos.coords.longitude,alt:pos.coords.altitude};updateGpsBadge();},
+      ()=>{updateGpsBadge();},
+      {enableHighAccuracy:true,maximumAge:2000}
+    );
+  }
+  orientationHandler=(e)=>{const h=getCompassHeading(e);if(h!==null){latestHeading=h;pushHeadingSample(h);updateCompassNeedle(h);}};
+  let usedFusion=false;
+  if(typeof AbsoluteOrientationSensor!=='undefined'){
+    try{
+      const perms=await Promise.all(['accelerometer','gyroscope','magnetometer'].map(n=>navigator.permissions.query({name:n}).catch(()=>({state:'granted'}))));
+      if(!perms.some(p=>p.state==='denied')){
+        orientationSensor=new AbsoluteOrientationSensor({frequency:30,referenceFrame:'screen'});
+        orientationSensor.addEventListener('reading',()=>{const h=quaternionToHeading(orientationSensor.quaternion);if(h!==null){latestHeading=h;pushHeadingSample(h);updateCompassNeedle(h);}});
+        orientationSensor.addEventListener('error',()=>{});
+        orientationSensor.start();
+        usedFusion=true;
+      }
+    }catch(e){}
+  }
+  if(!usedFusion){
+    try{
+      if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function'){
+        const perm=await DeviceOrientationEvent.requestPermission();
+        if(perm==='granted')window.addEventListener('deviceorientation',orientationHandler);
+      }else{
+        window.addEventListener('deviceorientationabsolute',orientationHandler);
+        window.addEventListener('deviceorientation',orientationHandler);
+      }
+    }catch(e){}
+  }
+
+  try{
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    $('cameraVideo').srcObject=cameraStream;
+    $('cameraVideo').style.display='block';
+    $('shutterRow').style.display='flex';
+  }catch(err){
+    showToast('カメラを起動できませんでした','err');
+    closeCamera();
+  }
+}
+function closeCameraSensors(){
+  if(geoWatchId!==null){navigator.geolocation.clearWatch(geoWatchId);geoWatchId=null;}
+  if(orientationHandler){window.removeEventListener('deviceorientation',orientationHandler);window.removeEventListener('deviceorientationabsolute',orientationHandler);orientationHandler=null;}
+  if(orientationSensor){try{orientationSensor.stop();}catch(e){}orientationSensor=null;}
+}
+function closeCamera(){
+  if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}
+  $('cameraVideo').style.display='none';
+  $('shutterRow').style.display='none';
+  $('cameraPlaceholder').style.display='flex';
+  $('camCompass').style.display='none';
+  closeCameraSensors();
+}
+$('btnOpenCamera').addEventListener('click',openCamera);
+$('tbShutterJump').addEventListener('click',()=>{if($('cameraVideo').style.display==='none')openCamera();});
+$('btnCamClose').addEventListener('click',closeCamera);
+
+// 撮影直後に長辺800pxへ圧縮（配布証跡として十分な画質のみ確保、保存容量・動作の軽さを優先）
+function compressToDataURL(video,maxDim,quality){
+  const w=video.videoWidth,h=video.videoHeight;
+  const scale=Math.min(1,maxDim/Math.max(w,h));
+  const cw=Math.round(w*scale), ch=Math.round(h*scale);
+  const canvas=document.createElement('canvas');
+  canvas.width=cw;canvas.height=ch;
+  canvas.getContext('2d').drawImage(video,0,0,cw,ch);
+  return canvas.toDataURL('image/jpeg',quality);
+}
+
+$('btnShutter').addEventListener('click',async()=>{
+  if(!latestGeo){$('camGpsWarn').style.display='block';setTimeout(()=>{$('camGpsWarn').style.display='none';},3000);}
+  const dataUrl=compressToDataURL($('cameraVideo'),800,0.68);
+  const heading=circularMeanDeg(headingBuffer);
+  const geo=latestGeo;
+  closeCamera();
+
+  const nearestArea=findContainingArea(geo);
+  const entry={
+    id:Date.now(), dataUrl, time:new Date().toLocaleTimeString('ja-JP'),
+    lat:geo?geo.lat:null, lng:geo?geo.lng:null, dir:heading,
+    areaKeyCode:nearestArea?nearestArea.keyCode:null,
+    memo:'', raw:''
+  };
+  photoEntries.push(entry);
+  await idbSavePhoto(entry);
+  placePhotoPin(entry);
+  showToast('撮影しました');
+});
+
+function findContainingArea(geo){
+  if(!geo||!instruction)return null;
+  for(const area of instruction.areas){
+    if(google.maps.geometry&&areaPolygons[area.keyCode]){
+      const poly=areaPolygons[area.keyCode].polygon;
+      if(google.maps.geometry.poly.containsLocation(new google.maps.LatLng(geo.lat,geo.lng),poly))return area;
+    }
+  }
+  return null;
+}
+
+function placePhotoPin(entry){
+  if(!entry.lat||!map)return;
+  const marker=new google.maps.Marker({
+    position:{lat:entry.lat,lng:entry.lng}, map:map, zIndex:6,
+    icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:'#1A8040',fillOpacity:.95,strokeColor:'#fff',strokeWeight:2}
+  });
+  marker.addListener('click',()=>openPinModal(entry.id));
+  photoPins.push({id:entry.id,marker});
+  map.panTo({lat:entry.lat,lng:entry.lng});
+}
+
+// ── ピン詳細モーダル ──
+let currentPinId=null;
+function openPinModal(id){
+  const entry=photoEntries.find(p=>p.id===id);
+  if(!entry)return;
+  currentPinId=id;
+  $('pinPhoto').src=entry.dataUrl;
+  $('pinMeta').textContent=`${entry.time}　📍${entry.lat?entry.lat.toFixed(5):'—'},${entry.lng?entry.lng.toFixed(5):'—'}`;
+  $('pinMemoInput').value=entry.memo||'';
+  $('pinModal').classList.add('show');
+}
+$('pinSaveBtn').addEventListener('click',async()=>{
+  const entry=photoEntries.find(p=>p.id===currentPinId);
+  if(!entry)return;
+  entry.memo=$('pinMemoInput').value.trim();
+  await idbSavePhoto(entry);
+  $('pinModal').classList.remove('show');
+  showToast('メモを保存しました');
+});
+$('pinDeleteBtn').addEventListener('click',async()=>{
+  const idx=photoEntries.findIndex(p=>p.id===currentPinId);
+  if(idx<0)return;
+  photoEntries.splice(idx,1);
+  await idbDeletePhoto(currentPinId);
+  const pinIdx=photoPins.findIndex(p=>p.id===currentPinId);
+  if(pinIdx>=0){photoPins[pinIdx].marker.setMap(null);photoPins.splice(pinIdx,1);}
+  $('pinModal').classList.remove('show');
+  showToast('削除しました');
+});
+
+// ── 音声メモ（任意・ピン詳細内でのみ使用）──
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+let recognition=null, recognizing=false;
+if(SR){
+  recognition=new SR();
+  recognition.lang='ja-JP';recognition.continuous=false;recognition.interimResults=false;
+  recognition.onstart=()=>{recognizing=true;$('pinVoiceBtn').textContent='🎙️ 聞き取り中…';};
+  recognition.onresult=(e)=>{
+    let text='';
+    for(let i=0;i<e.results.length;i++)text+=e.results[i][0].transcript;
+    $('pinMemoInput').value=(($('pinMemoInput').value||'').trim()+' '+text).trim();
+  };
+  recognition.onerror=()=>{};
+  recognition.onend=()=>{recognizing=false;$('pinVoiceBtn').textContent='🎙️ 音声で入力';};
+}
+$('pinVoiceBtn').addEventListener('click',()=>{
+  if(!recognition){showToast('この端末は音声入力に対応していません','err');return;}
+  if(recognizing){recognition.stop();return;}
+  try{recognition.start();}catch(e){}
+});
+$('tbMemo').addEventListener('click',()=>{
+  if(!photoEntries.length){showToast('まずは撮影してください','err');return;}
+  openPinModal(photoEntries[photoEntries.length-1].id);
+});
+
+// ── 配達禁止・苦情マーカー追加 ──
+$('menuAddProhibited').addEventListener('click',()=>{
+  $('menuModal').classList.remove('show');
+  $('prohibitedModal').classList.add('show');
+});
+$('prohibitedSaveBtn').addEventListener('click',async()=>{
+  if(!navigator.geolocation){showToast('位置情報が取得できません','err');return;}
+  navigator.geolocation.getCurrentPosition(async(pos)=>{
+    const pm={
+      id:'local-'+Date.now(), lat:pos.coords.latitude, lng:pos.coords.longitude,
+      type:$('prohibitedType').value, memo:$('prohibitedMemo').value.trim(),
+      createdAt:new Date().toISOString()
+    };
+    newProhibitedMarkers.push(pm);
+    await idbSaveState('newProhibitedMarkers',newProhibitedMarkers);
+    prohibitedMarkerObjs.push(buildProhibitedMarker(pm));
+    $('prohibitedModal').classList.remove('show');
+    $('prohibitedMemo').value='';
+    showToast('登録しました');
+  },()=>{showToast('位置情報の取得に失敗しました','err');});
+});
+
+// ── 表示モード切替 ──
+$('menuDisplayMode').addEventListener('click',()=>{
+  displayMode = displayMode==='number' ? 'point' : 'number';
+  $('menuModal').classList.remove('show');
+  renderInstruction();
+  showToast('表示モードを切り替えました（'+(displayMode==='number'?'数字':'ポイントマーク')+'）');
+});
+$('menuDistributorInfo').addEventListener('click',()=>{
+  $('menuModal').classList.remove('show');
+  if(!instruction){showToast('配達指示データが未読込です','err');return;}
+  showToast(`配達員: ${instruction.distributorName||'—'} ／ 案件: ${instruction.orderName||'—'}`);
+});
+
+// ── 進捗一覧モーダル ──
+$('tbProgress').addEventListener('click',()=>{
+  if(!instruction){showToast('配達指示データが未読込です','err');return;}
+  const list=$('progressList');
+  list.innerHTML=instruction.areas.map(area=>{
+    const r=areaResults[area.keyCode];
+    return `<div class="progress-item">
+      <div><div class="pname">${esc(area.name)}</div><div class="pstat">計画 ${area.plannedCount?.toLocaleString()||'—'}枚${r?'／実績 '+r.completedCount.toLocaleString()+'枚':''}</div></div>
+      <span class="badge ${r?'done':'pending'}">${r?'完了':'未着手'}</span>
+    </div>`;
+  }).join('');
+  $('progressModal').classList.add('show');
+});
+
+// ── 実績データのエクスポート ──
+$('tbExport').addEventListener('click',async()=>{
+  if(!instruction){showToast('配達指示データが未読込です','err');return;}
+  const areaResultsArr=Object.entries(areaResults).map(([keyCode,r])=>({keyCode,completedCount:r.completedCount,completedAt:r.completedAt}));
+  const photosOut=photoEntries.map(p=>({
+    id:p.id, photoName:'shabememo_'+p.id+'.jpg', time:p.time,
+    lat:p.lat, lng:p.lng, dir:p.dir, areaKeyCode:p.areaKeyCode, memo:p.memo
+  }));
+  const pkg={
+    formatVersion:1, packageType:'distribution_achievement',
+    orderId:instruction.orderId, distributorId:instruction.distributorId, distributorName:instruction.distributorName,
+    roundLabel:instruction.roundLabel, exportedAt:new Date().toISOString(),
+    areaResults:areaResultsArr, photos:photosOut, newProhibitedMarkers
+  };
+  const blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`実績データ_${instruction.distributorName||'配達員'}_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // 写真本体は別途Googleドライブ等で転送する前提のため、まとめてダウンロードできるようにファイル名一覧のみここで案内
+  showToast(`実績データを書き出しました（写真${photosOut.length}枚は別途フォルダへ転送してください）`);
+});
+
+// ── メニュー・モーダル開閉共通 ──
+$('sbMenuBtn').addEventListener('click',()=>$('menuModal').classList.add('show'));
+document.querySelectorAll('[data-close]').forEach(el=>{
+  el.addEventListener('click',(e)=>{e.target.closest('.modal-overlay').classList.remove('show');});
+});
+document.querySelectorAll('.modal-overlay').forEach(ov=>{
+  ov.addEventListener('click',(e)=>{if(e.target===ov)ov.classList.remove('show');});
+});
+
+// ── 起動時：前回状態の復元 ──
+(async()=>{
+  db=await openDB();
+  await setupMap();
+  instruction=await idbGetState('instruction');
+  areaResults=(await idbGetState('areaResults'))||{};
+  newProhibitedMarkers=(await idbGetState('newProhibitedMarkers'))||[];
+  photoEntries=await idbGetAllPhotos();
+  renderInstruction();
+  photoEntries.forEach(placePhotoPin);
+  updateProgressSummary();
+})();
+</script>
+</body>
+</html>
