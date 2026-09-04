@@ -23,10 +23,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 #app{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;}
 
 /* ── 上部ステータスバー ── */
+#deliveryBar{
+  height:40px;flex-shrink:0;display:flex;padding-top:env(safe-area-inset-top);z-index:31;
+}
+.delivery-btn{width:100%;border:none;font-size:13px;font-weight:800;color:#fff;letter-spacing:.02em;}
+.delivery-btn.start{background:var(--green);}
+.delivery-btn.end{background:var(--red);}
 #statusbar{
   height:44px;flex-shrink:0;background:var(--panel2);border-bottom:1px solid var(--border);
   display:flex;align-items:center;justify-content:space-between;padding:0 12px;
-  padding-top:env(safe-area-inset-top);z-index:30;
+  z-index:30;
 }
 #sbArea{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 #sbArea .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
@@ -119,6 +125,10 @@ input[type=file]{display:none;}
 
 <div id="app">
 
+  <div id="deliveryBar">
+    <button id="btnStartDelivery" class="delivery-btn start">▶ 配達開始</button>
+    <button id="btnEndDelivery" class="delivery-btn end" style="display:none;">■ 配達完了</button>
+  </div>
   <div id="statusbar">
     <div id="sbArea"><span class="dot"></span><span id="sbAreaText">配達指示データ未読込</span></div>
     <div id="sbProgress"></div>
@@ -367,12 +377,15 @@ async function handleImportInstruction(file){
     areaResults={};
     newProhibitedMarkers=[];
     routePoints=[];
+    stopRouteTracking();
+    isDeliveryActive=false;
+    updateDeliveryBarUI();
     await idbSaveState('instruction',instruction);
     await idbSaveState('areaResults',areaResults);
     await idbSaveState('newProhibitedMarkers',newProhibitedMarkers);
     await idbSaveState('routePoints',routePoints);
+    await idbSaveState('isDeliveryActive',isDeliveryActive);
     renderInstruction();
-    startRouteTracking();
     showToast(`配達指示データを読み込みました（エリア${instruction.areas.length}件）`);
   }catch(err){
     console.error(err);
@@ -380,7 +393,7 @@ async function handleImportInstruction(file){
   }
 }
 
-// ── 移動経路の記録（カメラの開閉に関係なく、指示データ読込時から作業終了まで継続する）──
+// ── 移動経路の記録（「配達開始」ボタンが押されている間だけ、カメラの開閉に関係なく継続する）──
 // 10〜30秒間隔での記録が目安とのことで、間を取って15秒間隔に設定。
 // バッテリー消費と軌跡の滑らかさのバランスを取るための値なので、必要なら調整可能。
 const ROUTE_SAMPLE_INTERVAL_MS=15000;
@@ -404,6 +417,28 @@ function stopRouteTracking(){
   if(routeWatchId!==null){navigator.geolocation.clearWatch(routeWatchId);routeWatchId=null;}
   if(routeTimerId!==null){clearInterval(routeTimerId);routeTimerId=null;}
 }
+
+// ── 配達開始／配達完了ボタン（経路記録の明示的なON/OFF）──
+let isDeliveryActive=false;
+function updateDeliveryBarUI(){
+  $('btnStartDelivery').style.display=isDeliveryActive?'none':'flex';
+  $('btnEndDelivery').style.display=isDeliveryActive?'flex':'none';
+}
+$('btnStartDelivery').addEventListener('click',async()=>{
+  isDeliveryActive=true;
+  await idbSaveState('isDeliveryActive',isDeliveryActive);
+  startRouteTracking();
+  updateDeliveryBarUI();
+  showToast('配達を開始しました（経路記録を開始）');
+});
+$('btnEndDelivery').addEventListener('click',async()=>{
+  if(!confirm('配達を完了しますか？経路記録が停止します。'))return;
+  isDeliveryActive=false;
+  await idbSaveState('isDeliveryActive',isDeliveryActive);
+  stopRouteTracking();
+  updateDeliveryBarUI();
+  showToast('配達を完了しました（経路記録を停止）。実績出力を忘れずに行ってください');
+});
 
 function renderInstruction(){
   if(!instruction){$('noInstructionMsg').style.display='flex';return;}
@@ -647,6 +682,8 @@ $('btnShutter').addEventListener('click',async()=>{
   const geo=latestGeo;
   closeCamera();
 
+  // 移動経路の記録は「配達開始」ボタンで明示的に始める・止める（撮影の有無やページ再読込には左右されない）
+
   const nearestArea=findContainingArea(geo);
   const entry={
     id:Date.now(), dataUrl, time:new Date().toLocaleTimeString('ja-JP'),
@@ -834,7 +871,9 @@ document.querySelectorAll('.modal-overlay').forEach(ov=>{
   renderInstruction();
   photoEntries.forEach(placePhotoPin);
   updateProgressSummary();
-  if(instruction)startRouteTracking(); // 指示データが読み込まれたままなら、経路記録も再開する
+  isDeliveryActive=(await idbGetState('isDeliveryActive'))||false;
+  updateDeliveryBarUI();
+  if(isDeliveryActive)startRouteTracking(); // 配達完了ボタンを押さずにページを閉じた場合、次回開いた時も記録を継続する
 })();
 </script>
 </body>
