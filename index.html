@@ -57,6 +57,15 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:var
 #sbProgress b{color:var(--orange);font-weight:800;}
 #sbMenuBtn{width:28px;height:28px;flex-shrink:0;border:none;background:none;font-size:18px;color:var(--dim);}
 
+/* ── 地図画面に常時表示するGPS状態バッジ（カメラ内の小さいバッジとは別に、離れた場所からでも一目でわかるようにする）── */
+#mainGpsBadge{
+  flex-shrink:0;font-size:15px;font-weight:900;letter-spacing:.02em;color:#fff;
+  padding:4px 10px;border-radius:9px;margin-right:8px;background:var(--dim2);
+  transition:background .2s;
+}
+#mainGpsBadge.ok{background:var(--green);}
+#mainGpsBadge.bad{background:var(--red);}
+
 /* ── カメラ領域 ── */
 #cameraZone{height:34vh;min-height:180px;flex-shrink:0;position:relative;background:#111;overflow:hidden;}
 #cameraVideo{width:100%;height:100%;object-fit:cover;display:block;}
@@ -149,6 +158,7 @@ input[type=file]{display:none;}
   <div id="statusbar">
     <div id="sbArea"><span class="dot"></span><span id="sbAreaText">配達指示データ未読込</span></div>
     <div id="sbProgress"></div>
+    <div id="mainGpsBadge">GPS:✕</div>
     <button id="sbMenuBtn">☰</button>
   </div>
 
@@ -377,6 +387,50 @@ async function setupMap(){
       map.setZoom(17);
     });
   });
+}
+
+// ── 現在地の継続監視（①GPS状態を地図画面に常時表示／②現在地マーカーを地図上に表示し続ける）──
+// カメラを開いていない通常の地図閲覧中や、配達開始後の移動中も、常にGPSの状態と自分の位置がわかるようにする。
+let mainWatchId=null, currentLocMarker=null, currentLocAccuracyCircle=null;
+function updateMainGpsBadge(ok){
+  const b=$('mainGpsBadge');
+  if(ok){b.textContent='GPS:○';b.classList.add('ok');b.classList.remove('bad');}
+  else{b.textContent='GPS:✕';b.classList.add('bad');b.classList.remove('ok');}
+}
+function updateCurrentLocMarker(lat,lng,accuracy){
+  const pos={lat,lng};
+  if(!currentLocMarker){
+    currentLocMarker=new google.maps.Marker({
+      position:pos, map:map, zIndex:20, clickable:false,
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:9,fillColor:'#1A6EBF',fillOpacity:1,strokeColor:'#fff',strokeWeight:3}
+    });
+  }else{
+    currentLocMarker.setPosition(pos);
+  }
+  if(accuracy){
+    if(!currentLocAccuracyCircle){
+      currentLocAccuracyCircle=new google.maps.Circle({
+        map:map, center:pos, radius:accuracy, clickable:false, zIndex:19,
+        strokeColor:'#1A6EBF', strokeOpacity:.35, strokeWeight:1,
+        fillColor:'#1A6EBF', fillOpacity:.10
+      });
+    }else{
+      currentLocAccuracyCircle.setCenter(pos);
+      currentLocAccuracyCircle.setRadius(accuracy);
+    }
+  }
+}
+function startMainGeoWatch(){
+  if(!navigator.geolocation){updateMainGpsBadge(false);return;}
+  if(mainWatchId!==null)return;
+  mainWatchId=navigator.geolocation.watchPosition(
+    pos=>{
+      updateMainGpsBadge(true);
+      updateCurrentLocMarker(pos.coords.latitude,pos.coords.longitude,pos.coords.accuracy);
+    },
+    err=>{updateMainGpsBadge(false);},
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
 }
 
 // ── 配達指示データの読み込み ──
@@ -894,6 +948,7 @@ document.querySelectorAll('.modal-overlay').forEach(ov=>{
 (async()=>{
   db=await openDB();
   await setupMap();
+  startMainGeoWatch();
   instruction=await idbGetState('instruction');
   areaResults=(await idbGetState('areaResults'))||{};
   newProhibitedMarkers=(await idbGetState('newProhibitedMarkers'))||[];
