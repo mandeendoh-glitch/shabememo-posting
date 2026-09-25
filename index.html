@@ -286,6 +286,9 @@ input[type=file]{display:none;}
 <script>
 const $=id=>document.getElementById(id);
 const API_KEY='AIzaSyCxFFQxa-0PtBYfJ9gXWkur2wiszMwk7S0';
+// GAS Webアプリのデプロイ後に発行されるURLをここに設定する（末尾は /exec）。
+// 未設定（空文字）の間は自動送信をスキップし、従来通りローカルへのダウンロードのみ行う。
+const GAS_WEBAPP_URL='https://script.google.com/macros/s/AKfycbzhXzTGQ1ugPGzVy7zsRRoUlz3vugVNaxQQR5wX7DkjyJic9snEpjm-x6VQscdjsYUq/exec';
 
 // ── 状態 ──
 let map=null, areaPolygons={}, photoPins=[], prohibitedMarkerObjs=[], activeIW=null;
@@ -493,6 +496,51 @@ function stopRouteTracking(){
   if(routeTimerId!==null){clearInterval(routeTimerId);routeTimerId=null;}
 }
 
+// ── 実績データのパッケージ化（includeImages=trueで写真の画像データも含める。GAS送信時のみtrue）──
+function buildAchievementPackage(includeImages){
+  const areaResultsArr=Object.entries(areaResults).map(([keyCode,r])=>({keyCode,completedCount:r.completedCount,completedAt:r.completedAt}));
+  const photosOut=photoEntries.map(p=>{
+    const base={id:p.id, photoName:'shabememo_'+p.id+'.jpg', time:p.time,
+      lat:p.lat, lng:p.lng, dir:p.dir, areaKeyCode:p.areaKeyCode, memo:p.memo};
+    if(includeImages)base.dataUrl=p.dataUrl;
+    return base;
+  });
+  return {
+    formatVersion:1, packageType:'distribution_achievement',
+    orderId:instruction.orderId, distributorId:instruction.distributorId, distributorName:instruction.distributorName,
+    orderName:instruction.orderName||instruction.clientName||'', roundLabel:instruction.roundLabel, exportedAt:new Date().toISOString(),
+    areaResults:areaResultsArr, photos:photosOut, newProhibitedMarkers,
+    routePoints // 15秒間隔で記録した移動経路（写メモdeMAP側で軌跡として表示する）
+  };
+}
+
+// ── 配達完了時、GAS Webアプリへ写真込みで自動送信する（配達員はボタンを押すだけで完結）──
+async function sendAchievementToAdmin(){
+  if(!instruction){return;}
+  if(!GAS_WEBAPP_URL){
+    showToast('送信先が未設定のため、自動送信をスキップしました。実績出力ボタンから手動で書き出してください','err');
+    return;
+  }
+  showToast('送信中です…（写真が多いと時間がかかります）');
+  const pkg=buildAchievementPackage(true);
+  try{
+    const res=await fetch(GAS_WEBAPP_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'}, // GAS側のCORSプリフライト回避のため text/plain で送信（中身はJSON）
+      body:JSON.stringify(pkg)
+    });
+    const result=await res.json();
+    if(result.ok){
+      showToast(`送信完了しました（写真${result.savedPhotoCount||0}枚を含む）。ありがとうございました`);
+    }else{
+      showToast('送信に失敗しました：'+(result.error||'不明なエラー')+'。実績出力ボタンから手動で書き出してください','err');
+    }
+  }catch(err){
+    console.error(err);
+    showToast('通信エラーのため送信できませんでした。電波の良い場所で再度お試しいただくか、実績出力ボタンから手動で書き出してください','err');
+  }
+}
+
 // ── 配達開始／配達完了ボタン（経路記録の明示的なON/OFF）──
 let isDeliveryActive=false;
 function updateDeliveryBarUI(){
@@ -507,12 +555,13 @@ $('btnStartDelivery').addEventListener('click',async()=>{
   showToast('配達を開始しました（経路記録を開始）');
 });
 $('btnEndDelivery').addEventListener('click',async()=>{
-  if(!confirm('配達を完了しますか？経路記録が停止します。'))return;
+  if(!confirm('配達を完了しますか？経路記録が停止し、実績データが自動送信されます。'))return;
   isDeliveryActive=false;
   await idbSaveState('isDeliveryActive',isDeliveryActive);
   stopRouteTracking();
   updateDeliveryBarUI();
-  showToast('配達を完了しました（経路記録を停止）。実績出力を忘れずに行ってください');
+  showToast('配達を完了しました（経路記録を停止）');
+  await sendAchievementToAdmin();
 });
 
 function renderInstruction(){
@@ -908,21 +957,10 @@ $('tbProgress').addEventListener('click',()=>{
   $('progressModal').classList.add('show');
 });
 
-// ── 実績データのエクスポート ──
+// ── 実績データのエクスポート（手動バックアップ用。通常はGAS自動送信で完結するため不要）──
 $('tbExport').addEventListener('click',async()=>{
   if(!instruction){showToast('配達指示データが未読込です','err');return;}
-  const areaResultsArr=Object.entries(areaResults).map(([keyCode,r])=>({keyCode,completedCount:r.completedCount,completedAt:r.completedAt}));
-  const photosOut=photoEntries.map(p=>({
-    id:p.id, photoName:'shabememo_'+p.id+'.jpg', time:p.time,
-    lat:p.lat, lng:p.lng, dir:p.dir, areaKeyCode:p.areaKeyCode, memo:p.memo
-  }));
-  const pkg={
-    formatVersion:1, packageType:'distribution_achievement',
-    orderId:instruction.orderId, distributorId:instruction.distributorId, distributorName:instruction.distributorName,
-    roundLabel:instruction.roundLabel, exportedAt:new Date().toISOString(),
-    areaResults:areaResultsArr, photos:photosOut, newProhibitedMarkers,
-    routePoints // 15秒間隔で記録した移動経路（写メモdeMAP側で軌跡として表示する）
-  };
+  const pkg=buildAchievementPackage(false); // 手動ダウンロードでは容量の大きい画像データは含めない
   const blob=new Blob([JSON.stringify(pkg,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -932,7 +970,7 @@ $('tbExport').addEventListener('click',async()=>{
   URL.revokeObjectURL(url);
 
   // 写真本体は別途Googleドライブ等で転送する前提のため、まとめてダウンロードできるようにファイル名一覧のみここで案内
-  showToast(`実績データを書き出しました（写真${photosOut.length}枚／経路${routePoints.length}点。写真は別途フォルダへ転送してください）`);
+  showToast(`実績データ（写真メタ情報のみ）を書き出しました（写真${pkg.photos.length}枚／経路${pkg.routePoints.length}点）。手動バックアップ用です。通常は配達完了ボタンで自動送信されます`);
 });
 
 // ── メニュー・モーダル開閉共通 ──
