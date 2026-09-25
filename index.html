@@ -508,7 +508,9 @@ function buildAchievementPackage(includeImages){
   return {
     formatVersion:1, packageType:'distribution_achievement',
     orderId:instruction.orderId, distributorId:instruction.distributorId, distributorName:instruction.distributorName,
-    orderName:instruction.orderName||instruction.clientName||'', roundLabel:instruction.roundLabel, exportedAt:new Date().toISOString(),
+    orderName:instruction.orderName||instruction.clientName||'', roundLabel:instruction.roundLabel,
+    instructionCreatedAt:instruction.createdAt||'', // 配達指示日（フォルダ命名で使用）
+    exportedAt:new Date().toISOString(),
     areaResults:areaResultsArr, photos:photosOut, newProhibitedMarkers,
     routePoints // 15秒間隔で記録した移動経路（写メモdeMAP側で軌跡として表示する）
   };
